@@ -1,3 +1,35 @@
+
+'''
+The code goes to grants.gov and downloads the XML file for today. 
+It then extracts the XML file and reads it into a dataframe.
+The dataframe is then cleaned and filtered to only show grants that are open.
+The results are then printed to a text file for sharing.
+
+Note: The code downloads the XML file to a local directory.
+As a result, the download time may vary based on your internet connection.
+With high speed internet (300 mbps), the download takes about 15 seconds.
+
+The code is written in Python 3.11.3 and uses the following libraries:
+pandas, requests, xml.etree.ElementTree, datetime, zipfile, os
+
+You may need to install the libraries if you do not have them installed.
+
+If you are new, it is recommended to install Anaconda.
+Anaconda is a free and open-source distribution of the Python and R programming languages 
+for scientific computing,that aims to simplify package management and deployment.
+Anaconda comes with many of the libraries you will need to get started.
+
+Anaconda: https://www.anaconda.com/products/individual
+
+After the download, the code demonstartes a few methods to 
+query the dataframe based on the column name and value.
+It also shows how to format the EstimatedTotalProgramFunding column
+and print the results for easy sharing.
+
+The code is written by Andrew Walker
+Aew5044@gmail.com
+
+'''
 # %%
 import pandas as pd
 import requests
@@ -57,6 +89,10 @@ else:
 
 # %%
 
+#This code is used to clean the dataframe
+#It converts the columns to the correct data types
+#It also converts the columns to categories to save memory
+
 col = df.columns
 
 df_clean = (df[col]
@@ -77,30 +113,26 @@ df_clean = (df[col]
                     AgencyName = lambda x: x.AgencyName.astype(str).astype('category'),
                     ExpectedNumberOfAwards = lambda x: x.ExpectedNumberOfAwards.astype(float).astype('Int32'),
                     Version = lambda x: x.Version.astype(str).astype('category'),
-                    CostSharingOrMatchingRequirement = lambda x: x.CostSharingOrMatchingRequirement.astype(str).astype('category'),
-                    #ArchiveDate = lambda x: pd.to_datetime(x['ArchiveDate'], format='%m%d%Y'),
-                    
-                    )          
-)
-df_clean.dtypes
-# %%
-#From df_clean, filter out all rows where the CloseDate is greater then today's date
-df_clean_today = df_clean[df_clean.CloseDate > datetime.today()]
+                    CostSharingOrMatchingRequirement = lambda x: x.CostSharingOrMatchingRequirement.astype(str).astype('category')     
+                    ))          
+
+del df
 #%%
-print(f'Number of unique agencies: {df["AgencyName"].nunique()}')
+#An example of creating a data quality check and sending the results to the console for sharing
+print(f'Number of unique agencies: {df_clean["AgencyName"].nunique()}')
 # %%
 #This prints out the number of null values and unique values in each column
 #An example of creating simple data quality checks and sending the results to a text file for sharing
-col = df.columns
+col = df_clean.columns
 
 for c in col:
-    print(f'There are {df[c].isnull().sum()} null values in {c} column') 
-    print(f'There are {df[c].nunique()} unique values in {c} column')
+    print(f'There are {df_clean[c].isnull().sum()} null values in {c} column') 
+    print(f'There are {df_clean[c].nunique()} unique values in {c} column')
 
     #Send the print statements to a text file
-    with open(r"C:\Python\xml\print.txt", "a") as f:
-        f.write(f'There are {df[c].isnull().sum()} null values in {c} column\n')
-        f.write(f'There are {df[c].nunique()} unique values in {c} column\n') 
+    with open(r"value_statements.txt", "a") as f:
+        f.write(f'There are {df_clean[c].isnull().sum()} null values in {c} column\n')
+        f.write(f'There are {df_clean[c].nunique()} unique values in {c} column\n') 
         f.write('\n')
 
 # %%
@@ -110,14 +142,18 @@ today = datetime.today()
 DE = df_clean.query('AgencyName == "Department of Education" \
               and CloseDate >= @today')
 
-#This is the method to format the EstimatedTotalProgramFunding column
-#and print the results for easy sharing.
+#This is the method to format and sum the EstimatedTotalProgramFunding column
+#and print the results to the console for easy sharing.
 formatted_funding = "${:,.0f}".format(DE["EstimatedTotalProgramFunding"].sum())
 print(f'There is a possible Estimated Total ProgramFunding of {formatted_funding} for the Department of Education available as of {today.strftime("%m/%d/%Y")}')
 
 # %%
+#Filter out all rows where the CloseDate is greater then today's date
+#Group by AgencyName and sum the EstimatedTotalProgramFunding
+#Sort the values in descending order
 
-agencies = df_clean_today \
+today = datetime.today()
+agencies = df_clean \
             .query('CloseDate >= @today') \
             .groupby('AgencyName') \
             .agg({'EstimatedTotalProgramFunding': 'sum'}) \
@@ -126,6 +162,6 @@ agencies = df_clean_today \
             
 agencies = agencies[agencies['EstimatedTotalProgramFunding'] > 0]
 
-agencies.dtypes
+agencies
 
 # %%
