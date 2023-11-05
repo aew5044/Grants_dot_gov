@@ -29,10 +29,17 @@ and print the results for easy sharing.
 The difference bewteen V1 and V2 is that V@ checks for the raw data, and if it is there, 
 the code will not download the file again. This saves time and bandwidth.
 
+#https://www.grants.gov/xml-extract.html website reference
+
 The code is written by Andrew Walker
 Aew5044@gmail.com
 
 '''
+#%%
+#Global variables to change to your unique environment
+download_space = r"C:\Users\aew50\Downloads"
+py_space = r"C:\Python\Grants_dot_gov"
+
 # %%
 import pandas as pd
 import requests
@@ -40,13 +47,12 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import zipfile
 import os
-#https://www.grants.gov/xml-extract.html website reference
 
 #%%
 # Your provided function
-def xml_to_df(file_path):
+def xml_to_df(xml_file_path):
     # Parse the XML file
-    tree = ET.parse(file_path)
+    tree = ET.parse(xml_file_path)
     root = tree.getroot()
     
     # Extracting the data from the 'OpportunitySynopsisDetail_1_0' tag
@@ -67,15 +73,20 @@ today_date = datetime.today().strftime('%Y%m%d')
 url = f"https://prod-grants-gov-chatbot.s3.amazonaws.com/extracts/GrantsDBExtract{today_date}v2.zip"
 
 # Local path to save the downloaded ZIP file
-zip_path = r"C:\Users\aew50\Downloads\GrantsDBExtract{}v2.zip".format(today_date)
+#zip_path = r"C:\Users\aew50\Downloads\GrantsDBExtract{}v2.zip".format(today_date)
 
 # XML file name based on today's date
 xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
-xml_file_path = os.path.join(r"C:\Users\aew50\Downloads", xml_file_name)
+xml_file_path = os.path.join(py_space, xml_file_name)
+
+zip_file_name = f"GrantsDBExtract{today_date}v2.zip"
+download_file_path = os.path.join(download_space, zip_file_name)
+zip_path = download_file_path
+
 
 # Download the ZIP file content
-if not os.path.exists(xml_file_path):
-    print('File does not exist')
+if not os.path.exists(download_file_path):
+    print('Downloading zip file')
     response = requests.get(url)
     if response.status_code == 200:
         # Save the content to a local ZIP file
@@ -85,26 +96,34 @@ if not os.path.exists(xml_file_path):
         # Extract the XML file from the ZIP archive
         with zipfile.ZipFile(zip_path, 'r') as z:
             # Assuming the XML file inside the ZIP has a predictable name
-            xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
-            z.extract(xml_file_name, r"C:\Python\Grants_dot_gov")
+            z.extract(xml_file_name, py_space)
 
-        # Now use your provided function to read the XML into a DataFrame
-        xml_file_path = os.path.join(r"C:\Users\aew50\Downloads", xml_file_name)
-        df = xml_to_df(xml_file_path)
-        print(df)
+        # # Now use your provided function to read the XML into a DataFrame
+        # df = xml_to_df(xml_file_path)
+        # print(df)
 
 else:
-    print('File was already downloaded')
-    xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
-    if not os.path.exists(xml_file_name):
+    print('Zip file was already downloaded for today')
+    # xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
+    if os.path.exists(xml_file_name):
+        print('XML file already exists')
+    else:
+        print('Extracting XML file')
         with zipfile.ZipFile(zip_path, 'r') as z:
         # Assuming the XML file inside the ZIP has a predictable name
-            xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
-            z.extract(xml_file_name, r"C:\Python\Grants_dot_gov")
-    else:
-        print('File was already extracted - move on the creating the dataframe')
-        df = xml_to_df(xml_file_path)
-        print(df)
+            # xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
+            z.extract(xml_file_name, py_space)
+
+#if df already exists, run the following code
+#Now use your provided function to read the XML into a DataFrame
+
+try:
+    df
+    print('df already exists')
+except NameError:
+    print('df does not exist - extracting XML file')
+    df = xml_to_df(xml_file_path)
+
 
 # %%
 
@@ -182,6 +201,7 @@ agencies = df_clean \
             .agg({'EstimatedTotalProgramFunding': 'sum'}) \
             .sort_values(by='EstimatedTotalProgramFunding', ascending=False) \
             .reset_index() \
+            .assign(in_MM = lambda x: x.EstimatedTotalProgramFunding/1000000) 
             
 agencies = agencies[agencies['EstimatedTotalProgramFunding'] > 0]
 
