@@ -35,147 +35,36 @@ The code is written by Andrew Walker
 Aew5044@gmail.com
 
 '''
-#%%
-#Global variables to change to your unique environment
+# %%
+
 download_space = r"C:\Users\aew50\Downloads"
 py_space = r"C:\Python\Grants_dot_gov"
-
-# %%
 import pandas as pd
-import requests
-import xml.etree.ElementTree as ET
+import plotly.express as px
+# import requests
+# import xml.etree.ElementTree as ET
 from datetime import datetime
-import zipfile
-import os
+# import zipfile
+# import os
 
+#User defined functions
+from download_and_clean_raw_data import global_variables, download, clean_df
+
+df_clean = None
 #%%
-# Your provided function
-def xml_to_df(xml_file_path):
-    # Parse the XML file
-    tree = ET.parse(xml_file_path)
-    root = tree.getroot()
-    
-    # Extracting the data from the 'OpportunitySynopsisDetail_1_0' tag
-    data = []
-    for opportunity in root.findall('{http://apply.grants.gov/system/OpportunityDetail-V1.0}OpportunitySynopsisDetail_1_0'):
-        record = {}
-        for child in opportunity:
-            record[child.tag.split('}')[-1]] = child.text
-        data.append(record)
-    
-    # Convert the list of dictionaries into a pandas DataFrame
-    df = pd.DataFrame(data)
-    
-    return df
 
-# Generate URL with today's date
-today_date = datetime.today().strftime('%Y%m%d')
-url = f"https://prod-grants-gov-chatbot.s3.amazonaws.com/extracts/GrantsDBExtract{today_date}v2.zip"
-
-# Local path to save the downloaded ZIP file
-#zip_path = r"C:\Users\aew50\Downloads\GrantsDBExtract{}v2.zip".format(today_date)
-
-# XML file name based on today's date
-xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
-xml_file_path = os.path.join(py_space, xml_file_name)
-
-zip_file_name = f"GrantsDBExtract{today_date}v2.zip"
-download_file_path = os.path.join(download_space, zip_file_name)
-zip_path = download_file_path
-
-
-# Download the ZIP file content
-if not os.path.exists(download_file_path):
-    print('Downloading zip file')
-    response = requests.get(url)
-    if response.status_code == 200:
-        # Save the content to a local ZIP file
-        with open(zip_path, 'wb') as f:
-            f.write(response.content)
-
-        # Extract the XML file from the ZIP archive
-        with zipfile.ZipFile(zip_path, 'r') as z:
-            # Assuming the XML file inside the ZIP has a predictable name
-            z.extract(xml_file_name, py_space)
-
-        # # Now use your provided function to read the XML into a DataFrame
-        # df = xml_to_df(xml_file_path)
-        # print(df)
-
-else:
-    print('Zip file was already downloaded for today')
-    # xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
-    if os.path.exists(xml_file_name):
-        print('XML file already exists')
+def main():
+    # Get the global variables
+    url, today_date = global_variables()
+    global df_clean
+    df = download(url=url, py_space=py_space, download_space=download_space, today_date=today_date)
+    if df_clean is None:
+        df_clean = clean_df(df)
     else:
-        print('Extracting XML file')
-        with zipfile.ZipFile(zip_path, 'r') as z:
-        # Assuming the XML file inside the ZIP has a predictable name
-            # xml_file_name = f"GrantsDBExtract{today_date}v2.xml"
-            z.extract(xml_file_name, py_space)
+        print('clean_df already exists')
 
-#if df already exists, run the following code
-#Now use your provided function to read the XML into a DataFrame
-
-try:
-    df
-    print('df already exists')
-except NameError:
-    print('df does not exist - extracting XML file')
-    df = xml_to_df(xml_file_path)
-
-
-# %%
-
-#This code is used to clean the dataframe
-#It converts the columns to the correct data types
-#It also converts the columns to categories to save memory
-
-col = df.columns
-
-df_clean = (df[col]
-            #convert CloseDate to date from MMDDYYYY
-            .assign(CloseDate = lambda x: pd.to_datetime(x['CloseDate'], format='%m%d%Y'),
-                    PostDate = lambda x: pd.to_datetime(x['PostDate'], format='%m%d%Y'),
-                    LastUpdatedDate = lambda x: pd.to_datetime(x['PostDate'], format='%m%d%Y'),
-                    AwardCeiling = lambda x: pd.to_numeric(x['AwardCeiling'], errors='coerce'),
-                    AwardFloor = lambda x: x.AwardFloor.astype(float).astype('Int32'),
-                    EstimatedTotalProgramFunding = lambda x: x.EstimatedTotalProgramFunding.astype(float).astype('Int64'),
-                    OpportunityCategory = lambda x: x.OpportunityCategory.astype(str).astype('category'),
-                    FundingInstrumentType = lambda x: x.FundingInstrumentType.astype(str).astype('category'),
-                    CategoryOfFundingActivity = lambda x: x.CategoryOfFundingActivity.astype(str).astype('category'),
-                    CategoryExplanation = lambda x: x.CategoryExplanation.astype(str).astype('category'),
-                    EligibleApplicants = lambda x: x.EligibleApplicants.astype(str).astype('category'),
-                    AdditionalInformationOnEligibility = lambda x: x.AdditionalInformationOnEligibility.astype(str),
-                    AgencyCode = lambda x: x.AgencyCode.astype(str).astype('category'),
-                    AgencyName = lambda x: x.AgencyName.astype(str).astype('category'),
-                    ExpectedNumberOfAwards = lambda x: x.ExpectedNumberOfAwards.astype(float).astype('Int32'),
-                    Version = lambda x: x.Version.astype(str).astype('category'),
-                    CostSharingOrMatchingRequirement = lambda x: x.CostSharingOrMatchingRequirement.astype(str).astype('category')     
-                    ))          
-
-del df
-#%%
-#An example of creating a data quality check and sending the results to the console for sharing
-print(f'Number of unique agencies: {df_clean["AgencyName"].nunique()}')
-# %%
-#This prints out the number of null values and unique values in each column
-#An example of creating simple data quality checks and sending the results to a text file for sharing
-col = df_clean.columns
-
-today = datetime.today()
-
-#Send the print statements to a text file
-
-#add today's date to the file name
-filename = f"value_statements_{today.strftime('%Y%m%d')}.txt"
-
-with open(filename, "a") as f:
-    f.write(f'Date of extraction is {today.strftime("%m/%d/%Y")}\n')
-    for c in col:
-        f.write(f'There are {df_clean[c].isnull().sum()} null values in {c} column\n')
-        f.write(f'There are {df_clean[c].nunique()} unique values in {c} column\n') 
-        f.write('\n')
+if __name__ == "__main__":
+    main()
 
 # %%
 #this is the method to query the dataframe based on the column name and value
@@ -208,3 +97,50 @@ agencies = agencies[agencies['EstimatedTotalProgramFunding'] > 0]
 agencies
 
 # %%
+
+# Load the dataset
+file_path = r"C:\Python\Grants_dot_gov\GrantsDBExtract20211006v2.csv"  # Update with the path to your data file
+grants_data = pd.read_csv(file_path)
+
+# Convert CloseDate to datetime and calculate the number of days from today
+grants_data['CloseDate'] = pd.to_datetime(grants_data['CloseDate'], errors='coerce')
+today = datetime.now()
+grants_data['DaysUntilClose'] = (grants_data['CloseDate'] - today).dt.days
+
+# # Handle NaN values in 'EstimatedTotalProgramFunding'
+filtered_data = grants_data.dropna(subset=['EstimatedTotalProgramFunding'])
+
+# Group by AgencyName and sum the EstimatedTotalProgramFunding, then take the top 20
+top_agencies = filtered_data.groupby('AgencyName')['EstimatedTotalProgramFunding'].sum().nlargest(20).index
+
+# Filter the dataset for only these top agencies
+filtered_data = filtered_data[filtered_data['AgencyName'].isin(top_agencies)].query('CloseDate >= @today')    
+filtered_data2 = filtered_data[filtered_data['DaysUntilClose'] > 0]
+
+# Create the bubble plot with the adjusted data
+fig = px.scatter(
+    filtered_data2,
+    x="DaysUntilClose",
+    y="ExpectedNumberOfAwards",
+    size="EstimatedTotalProgramFunding",
+    color="AgencyName",
+    hover_name="AgencyName",
+    size_max=60,
+    title="Bubble Plot of Grant Opportunities by Top Funding Agencies"
+)
+
+fig.show()
+
+# %%
+
+fig.write_html("Bubble.html")  # Replace with your desired file path
+#%%
+
+# %%
+
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, paragraph    
+from reportlab.lib.units import inch
+#%%
+#Create a PDF witht the title "My Title"
